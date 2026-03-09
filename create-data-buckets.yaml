@@ -1,0 +1,13 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Create landing and staging buckets
+
+Resources:
+#  LandingBucket:
+#    Type: AWS::S3::Bucket
+#    Properties:
+#      BucketName: com-in-context-data-load-landing
+#
+  StagingBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: com-in-context-data-load-staging
