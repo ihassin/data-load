@@ -1,12 +1,12 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: Create an AWS Glue crawler
 
-Parameters:
-  CityDataS3BucketName:
-    Type: String
-    Default: "s3://com-in-context-data-load-staging"
-
 Resources:
+  CityDataS3BucketName:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: com-in-context-data-load-staging
+
   CityDataGlueDatabase:
     Type: AWS::Glue::Database
     Properties:
