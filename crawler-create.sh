@@ -5,6 +5,8 @@ STAGING_BUCKET_NAME="com-in-context-data-load-staging"
 aws cloudformation deploy --template-file glue-crawler.yaml --stack-name com-in-context-data-create-crawler --capabilities CAPABILITY_NAMED_IAM \
 --profile "$AWS_TW_PROFILE" --region "$AWS_PERSONAL_REGION"
 
+aws s3 sync ./data/ "s3://$STAGING_BUCKET_NAME/data" --profile "$AWS_TW_PROFILE" --region "$AWS_PERSONAL_REGION"
+
 aws glue start-crawler --name CityDataCrawler \
 --profile "$AWS_TW_PROFILE" --region "$AWS_PERSONAL_REGION"
 
