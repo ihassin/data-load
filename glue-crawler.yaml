@@ -37,6 +37,8 @@ Resources:
                 Action:
                   - s3:ListBucket
                   - s3:GetObject
+                  - s3:PutObject
+                  - 3:DeleteObject
                 Resource:
                   - !GetAtt CityDataS3BucketName.Arn
                   - !Sub "${CityDataS3BucketName.Arn}/*"
@@ -64,10 +66,30 @@ Resources:
         - !Ref CityDataCSVClassifier
       Targets:
         S3Targets:
-          - Path: !Sub "${CityDataS3BucketName}/data/"
+          - Path: !Sub "${CityDataS3BucketName}/city-data/"
       SchemaChangePolicy:
         UpdateBehavior: UPDATE_IN_DATABASE
         DeleteBehavior: LOG
+
+  GlueJob:
+    Type: AWS::Glue::Job
+    Properties:
+      Name: city-data-etl-job
+      Description: "Replace nulls with 'n/a'"
+      Role: !GetAtt CityDataGlueCrawlerRole.Arn
+      GlueVersion: "4.0"
+      Command:
+        Name: glueetl
+        ScriptLocation: !Sub "s3://${CityDataS3BucketName}/scripts/city_etl.py"
+        PythonVersion: "3"
+      DefaultArguments:
+        --job-bookmark-option: job-bookmark-enable
+        --TempDir: !Sub "s3://${CityDataS3BucketName}/temp/"
+        --enable-continuous-cloudwatch-log: "true"
+      ExecutionProperty:
+        MaxConcurrentRuns: 1
+      Timeout: 30
+      MaxRetries: 1
 
   CityDataAthenaNamedQuery:
     Type: AWS::Athena::NamedQuery
@@ -76,7 +98,17 @@ Resources:
       Description: "Return the cities"
       Name: "ReturnCities"
       QueryString: >
-        SELECT * FROM "data" limit 10;
+        SELECT * FROM "city_data";
+      WorkGroup: "primary" # Optional: specify a workgroup if needed
+
+  ProcessedCityDataAthenaNamedQuery:
+    Type: AWS::Athena::NamedQuery
+    Properties:
+      Database: !Ref CityDataGlueDatabase
+      Description: "Return processed cities"
+      Name: "ReturnProcessedCities"
+      QueryString: >
+        SELECT * FROM "processed";
       WorkGroup: "primary" # Optional: specify a workgroup if needed
 
 Outputs:
@@ -88,9 +120,9 @@ Outputs:
     Value: !Ref CityDataGlueDatabase
     Description: Name of the created database
 
-  AthenaNamedQueryId:
-    Description: "The unique ID of the created Athena Named Query"
-    Value: !Ref CityDataAthenaNamedQuery
+  GlueETLJob:
+    Description: "Glue ETL"
+    Value: !Ref GlueJob
 
 #  TableName:
 #    Value: !Ref CityDataGlueTable

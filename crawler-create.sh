@@ -2,10 +2,11 @@
 
 STAGING_BUCKET_NAME="com-in-context-data-load-staging"
 
-aws cloudformation deploy --template-file glue-crawler.yaml --stack-name com-in-context-data-create-crawler --capabilities CAPABILITY_NAMED_IAM \
+aws cloudformation deploy --template-file glue-crawler.yaml --stack-name com-in-context-city-data-etl --capabilities CAPABILITY_NAMED_IAM \
 --profile "$AWS_TW_PROFILE" --region "$AWS_PERSONAL_REGION"
 
-aws s3 sync ./data/ "s3://$STAGING_BUCKET_NAME/data" --profile "$AWS_TW_PROFILE" --region "$AWS_PERSONAL_REGION"
+aws s3 sync ./data/ "s3://$STAGING_BUCKET_NAME/city-data" --profile "$AWS_TW_PROFILE" --region "$AWS_PERSONAL_REGION"
+aws s3 sync ./scripts/ "s3://$STAGING_BUCKET_NAME/scripts" --profile "$AWS_TW_PROFILE" --region "$AWS_PERSONAL_REGION"
 
 aws glue start-crawler --name CityDataCrawler \
 --profile "$AWS_TW_PROFILE" --region "$AWS_PERSONAL_REGION"
@@ -16,3 +17,6 @@ while true; do
   [ "$STATE" = "READY" ] && break
   sleep 10
 done
+
+aws glue start-job-run --job-name city-data-etl-job \
+--profile "$AWS_TW_PROFILE" --region "$AWS_PERSONAL_REGION"
