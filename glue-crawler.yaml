@@ -15,35 +15,6 @@ Resources:
         Name: city-data-db
         Description: Database for CityData
 
-#  CityDataGlueTable:
-#    Type: AWS::Glue::Table
-#    Properties:
-#      CatalogId: !Ref AWS::AccountId
-#      DatabaseName: !Ref CityDataGlueDatabase
-#      TableInput:
-#        Name: city-data-table
-#        TableType: EXTERNAL_TABLE
-#        Parameters:
-#          classification: csv
-#        StorageDescriptor:
-#          Location: !Sub "${CityDataS3BucketName}/data/"
-#          InputFormat: org.apache.hadoop.mapred.TextInputFormat
-#          OutputFormat: org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat
-#          Compressed: false
-#          SerdeInfo:
-#            SerializationLibrary: org.apache.hadoop.hive.serde2.OpenCSVSerde
-#            Parameters:
-#              separatorChar: ","
-#          Columns:
-#            - Name: id
-#              Type: string
-#            - Name: country
-#              Type: string
-#            - Name: state
-#              Type: string
-#            - Name: city
-#              Type: string
-
   CityDataGlueCrawlerRole:
     Type: AWS::IAM::Role
     Properties:
@@ -66,10 +37,9 @@ Resources:
                 Action:
                   - s3:ListBucket
                   - s3:GetObject
-                Resource: "*"
-#                  - arn:aws:s3:::com-in-context-data-load-staging
-#                  - arn:aws:s3:::com-in-context-data-load-staging/*
-
+                Resource:
+                  - !GetAtt CityDataS3BucketName.Arn
+                  - !Sub "${CityDataS3BucketName.Arn}/*"
 
   CityDataCSVClassifier:
     Type: AWS::Glue::Classifier
