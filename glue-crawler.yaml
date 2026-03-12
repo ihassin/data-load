@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: Create an AWS Glue crawler
+Description: Create an AWS Glue crawler, catalogue, ETL job, Athena queries
 
 Resources:
   CityDataS3BucketName:
