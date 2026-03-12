@@ -22,13 +22,32 @@ while true; do
   sleep 10
 done
 
-echo "Starting ETL"
-aws glue start-job-run --job-name city-data-etl-job \
---profile "$AWS_TW_PROFILE" --region "$AWS_PERSONAL_REGION"
+echo "Crawler finished"
+
 #--arguments "{
 #  \"--BUCKET_NAME\": \"s3://$STAGING_BUCKET_NAME\",
 #  \"--DATA_FILE_LOCATION\": \"$DATA_PATH\",
 #  \"--DATA_FILE_NAME\": \"CityData.csv\",
 #  \"--PROCESSED_DATA_LOCATION\": \"processed\"
 #  }"
+echo "Starting ETL Job"
+RUN_ID=$(aws glue start-job-run --job-name city-data-etl-job --profile "$AWS_TW_PROFILE" --region "$AWS_PERSONAL_REGION" --output text)
 
+echo "Job Run ID: $RUN_ID"
+
+while true; do
+  STATE=$(aws glue get-job-run \
+    --job-name city-data-etl-job \
+    --run-id "$RUN_ID" \
+    --query 'JobRun.JobRunState' \
+    --output text \
+    --profile "$AWS_TW_PROFILE" --region "$AWS_PERSONAL_REGION")
+
+  echo "State: $STATE"
+
+  if [[ "$STATE" == "SUCCEEDED" || "$STATE" == "FAILED" || "$STATE" == "STOPPED" ]]; then
+    break
+  fi
+
+  sleep 10
+done

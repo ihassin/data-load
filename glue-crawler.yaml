@@ -1,5 +1,28 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: Create an AWS Glue crawler
+Description: Create an AWS Glue crawler, catalogue, ETL job, Athena queries
+
+Parameters:
+  CityDBName:
+    Type: String
+    Default: "city-data-db"
+  CityDataPath:
+    Type: String
+    Default: "city-data"
+  CityDataProcessedPath:
+    Type: String
+    Default: "processed"
+  CityDataFileName:
+    Type: String
+    Default: "CityData.csv"
+  ScriptPath:
+    Type: String
+    Default: "scripts"
+  CityDataProcessedTableName:
+    Type: String
+    Default: "city-data-processed"
+  CityDataETLScriptName:
+    Type: String
+    Default: "city_etl.py"
 
 Resources:
   CityDataS3BucketName:
@@ -12,7 +35,7 @@ Resources:
     Properties:
       CatalogId: !Ref AWS::AccountId
       DatabaseInput:
-        Name: city-data-db
+        Name: !Ref CityDBName
         Description: Database for the data
 
   CityDataGlueCrawlerRole:
@@ -66,7 +89,7 @@ Resources:
         - !Ref CityDataCSVClassifier
       Targets:
         S3Targets:
-          - Path: !Sub "${CityDataS3BucketName}/city-data/"
+          - Path: !Sub "${CityDataS3BucketName}/${CityDataPath}/"
       SchemaChangePolicy:
         UpdateBehavior: UPDATE_IN_DATABASE
         DeleteBehavior: LOG
@@ -80,16 +103,16 @@ Resources:
       GlueVersion: "4.0"
       Command:
         Name: glueetl
-        ScriptLocation: !Sub "s3://${CityDataS3BucketName}/scripts/city_etl.py"
+        ScriptLocation: !Sub "s3://${CityDataS3BucketName}/${ScriptPath}/${CityDataETLScriptName}"
         PythonVersion: "3.9"
       DefaultArguments:
         --job-bookmark-option: job-bookmark-enable
         --TempDir: !Sub "s3://${CityDataS3BucketName}/temp/"
         --enable-continuous-cloudwatch-log: "true"
         "--BUCKET_NAME": !Sub "s3://${CityDataS3BucketName}"
-        "--DATA_FILE_LOCATION": "city-data"
-        "--DATA_FILE_NAME": "CityData.csv"
-        "--PROCESSED_DATA_LOCATION": "processed"
+        "--DATA_FILE_LOCATION": !Ref CityDataPath
+        "--DATA_FILE_NAME": !Ref CityDataFileName
+        "--PROCESSED_DATA_LOCATION": !Ref CityDataProcessedPath
       ExecutionProperty:
         MaxConcurrentRuns: 1
       Timeout: 30
@@ -112,13 +135,13 @@ Resources:
       CatalogId: !Ref AWS::AccountId
       DatabaseName: !Ref CityDataGlueDatabase
       TableInput:
-        Name: city-data-processed
+        Name: !Ref CityDataProcessedTableName
         TableType: EXTERNAL_TABLE
         Parameters:
           classification: parquet
           EXTERNAL: true
         StorageDescriptor:
-          Location: !Sub "s3://${CityDataS3BucketName}/processed/"
+          Location: !Sub "s3://${CityDataS3BucketName}/${CityDataProcessedPath}/"
           InputFormat: org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat
           OutputFormat: org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat
           Compressed: false
@@ -140,8 +163,7 @@ Resources:
       Database: !Ref CityDataGlueDatabase
       Description: "Return processed cities"
       Name: "ReturnProcessedCities"
-      QueryString: >
-        SELECT * FROM "processed";
+      QueryString: !Sub "SELECT * FROM \"${CityDataProcessedTableName}\";"
       WorkGroup: "primary" # Optional: specify a workgroup if needed
 
 Outputs:
