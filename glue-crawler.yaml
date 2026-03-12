@@ -141,7 +141,7 @@ Resources:
       Description: "Return processed cities"
       Name: "ReturnProcessedCities"
       QueryString: >
-        SELECT * FROM "processed";
+        SELECT * FROM "city-data-processed";
       WorkGroup: "primary" # Optional: specify a workgroup if needed
 
 Outputs:
