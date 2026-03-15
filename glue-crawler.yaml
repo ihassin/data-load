@@ -23,6 +23,9 @@ Parameters:
   CityDataETLScriptName:
     Type: String
     Default: "city_etl.py"
+  CityDataDQScriptName:
+    Type: String
+    Default: "city_dq.py"
 
 Resources:
   CityDataS3BucketName:
@@ -94,13 +97,13 @@ Resources:
         UpdateBehavior: UPDATE_IN_DATABASE
         DeleteBehavior: LOG
 
-  GlueJob:
+  GlueETLJob:
     Type: AWS::Glue::Job
     Properties:
       Name: city-data-etl-job
       Description: "Replace nulls with 'n/a'"
       Role: !GetAtt CityDataGlueCrawlerRole.Arn
-      GlueVersion: "4.0"
+      GlueVersion: "5.0"
       Command:
         Name: glueetl
         ScriptLocation: !Sub "s3://${CityDataS3BucketName}/${ScriptPath}/${CityDataETLScriptName}"
@@ -118,6 +121,20 @@ Resources:
       Timeout: 30
       MaxRetries: 0
       MaxCapacity: 1
+
+  GlueDataQualityJob:
+    Type: AWS::Glue::Job
+    Properties:
+      Name: city-data-quality-job
+      Role: !GetAtt CityDataGlueCrawlerRole.Arn
+      GlueVersion: "5.0"
+      Command:
+        Name: glueetl
+        ScriptLocation: !Sub "s3://${CityDataS3BucketName}/${ScriptPath}/${CityDataDQScriptName}"
+      DefaultArguments:
+        --bucket_name: !Ref CityDataS3BucketName
+        --file_path: !Sub "${CityDataProcessedPath}/city_data.parquet"
+        --enable-glue-data-quality: "true"
 
   CityDataAthenaNamedQuery:
     Type: AWS::Athena::NamedQuery
@@ -174,11 +191,3 @@ Outputs:
   DatabaseName:
     Value: !Ref CityDataGlueDatabase
     Description: Name of the created database
-
-  GlueETLJob:
-    Description: "Glue ETL"
-    Value: !Ref GlueJob
-
-#  TableName:
-#    Value: !Ref CityDataGlueTable
-#    Description: Name of the created table
