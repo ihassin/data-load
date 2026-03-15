@@ -7,7 +7,6 @@ from pyspark.context import SparkContext
 from awsglue.context import GlueContext
 from pyspark.sql.functions import col, when
 
-# args = getResolvedOptions(sys.argv, ['JOB_NAME'])
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
@@ -55,7 +54,7 @@ for row in df.take(5):
     logger.info(row)
 
 df.write.mode("overwrite").parquet(
-    f"{bucket_name}/{processed_data_location}/"
+    f"{bucket_name}/{processed_data_location}/city_data.parquet"
 )
 
 job.commit()

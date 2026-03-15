@@ -23,12 +23,18 @@ Parameters:
   CityDataETLScriptName:
     Type: String
     Default: "city_etl.py"
+  CityDataDQScriptName:
+    Type: String
+    Default: "city_dq.py"
+  CityDataBucketName:
+    Type: String
+    Default: "com-in-context-data-load-staging"
 
 Resources:
   CityDataS3BucketName:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: com-in-context-data-load-staging
+      BucketName: !Ref CityDataBucketName
 
   CityDataGlueDatabase:
     Type: AWS::Glue::Database
@@ -94,13 +100,13 @@ Resources:
         UpdateBehavior: UPDATE_IN_DATABASE
         DeleteBehavior: LOG
 
-  GlueJob:
+  GlueETLJob:
     Type: AWS::Glue::Job
     Properties:
       Name: city-data-etl-job
       Description: "Replace nulls with 'n/a'"
       Role: !GetAtt CityDataGlueCrawlerRole.Arn
-      GlueVersion: "4.0"
+      GlueVersion: "5.0"
       Command:
         Name: glueetl
         ScriptLocation: !Sub "s3://${CityDataS3BucketName}/${ScriptPath}/${CityDataETLScriptName}"
@@ -118,6 +124,20 @@ Resources:
       Timeout: 30
       MaxRetries: 0
       MaxCapacity: 1
+
+  GlueDataQualityJob:
+    Type: AWS::Glue::Job
+    Properties:
+      Name: city-data-quality-job
+      Role: !GetAtt CityDataGlueCrawlerRole.Arn
+      GlueVersion: "5.0"
+      Command:
+        Name: glueetl
+        ScriptLocation: !Sub "s3://${CityDataS3BucketName}/${ScriptPath}/${CityDataDQScriptName}"
+      DefaultArguments:
+        --bucket_name: !Ref CityDataS3BucketName
+        --file_path: !Sub "${CityDataProcessedPath}/city_data.parquet"
+        --enable-glue-data-quality: "true"
 
   CityDataAthenaNamedQuery:
     Type: AWS::Athena::NamedQuery
@@ -166,6 +186,46 @@ Resources:
       QueryString: !Sub "SELECT * FROM \"${CityDataProcessedTableName}\";"
       WorkGroup: "primary" # Optional: specify a workgroup if needed
 
+  CityDataWorkflow:
+    Type: AWS::Glue::Workflow
+    Properties:
+      Name: city-data-workflow
+
+  StartCityDataPipelineTrigger:
+    Type: AWS::Glue::Trigger
+    Properties:
+      Name: StartCityDataPipelineTrigger
+      Description: Trigger to start the ETL script
+      Type: ON_DEMAND
+      WorkflowName: !Ref CityDataWorkflow
+      Actions:
+        - JobName: !Ref GlueETLJob
+
+  RunDataQualityTrigger:
+    Type: AWS::Glue::Trigger
+    DependsOn:
+      - GlueETLJob
+      - GlueDataQualityJob
+      - StartCityDataPipelineTrigger
+    Properties:
+      Name: RunDataQualityTrigger
+      Type: CONDITIONAL
+      StartOnCreation: true
+      Description: Trigger to start Data Quality script after ETL script succeeds
+      WorkflowName: !Ref CityDataWorkflow
+      Predicate:
+        Logical: AND
+        Conditions:
+          - JobName: !Ref GlueETLJob
+            State: SUCCEEDED
+            LogicalOperator: EQUALS
+      Actions:
+        - JobName: !Ref GlueDataQualityJob
+          Arguments:
+            --JOB_NAME: "RunDataQualityTrigger"
+            --file_path: !Sub "${CityDataProcessedPath}/city_data.parquet/"
+            --bucket_name: !Ref CityDataBucketName
+
 Outputs:
   CrawlerName:
     Value: !Ref CityDataGlueCrawler
@@ -174,11 +234,3 @@ Outputs:
   DatabaseName:
     Value: !Ref CityDataGlueDatabase
     Description: Name of the created database
-
-  GlueETLJob:
-    Description: "Glue ETL"
-    Value: !Ref GlueJob
-
-#  TableName:
-#    Value: !Ref CityDataGlueTable
-#    Description: Name of the created table
