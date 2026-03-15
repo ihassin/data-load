@@ -53,7 +53,6 @@ for column in df.columns:
 # --------------------------------------------------
 
 if bad_columns:
-
     logger.error("*** Data quality failure: NULL values detected")
 
     for col_name, count in bad_columns:
