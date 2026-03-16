@@ -26,12 +26,15 @@ Parameters:
   CityDataDQScriptName:
     Type: String
     Default: "city_dq.py"
+  CityDataBucketName:
+    Type: String
+    Default: "com-in-context-data-load-staging"
 
 Resources:
   CityDataS3BucketName:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: com-in-context-data-load-staging
+      BucketName: !Ref CityDataBucketName
 
   CityDataGlueDatabase:
     Type: AWS::Glue::Database
@@ -182,6 +185,47 @@ Resources:
       Name: "ReturnProcessedCities"
       QueryString: !Sub "SELECT * FROM \"${CityDataProcessedTableName}\";"
       WorkGroup: "primary" # Optional: specify a workgroup if needed
+
+  CityDataWorkflow:
+    Type: AWS::Glue::Workflow
+    Properties:
+      Name: city-data-workflow
+
+  StartCityDataPipelineTrigger:
+    Type: AWS::Glue::Trigger
+    Properties:
+      Name: StartCityDataPipelineTrigger
+      Description: Trigger to start the ETL script
+      Type: ON_DEMAND
+      StartOnCreation: true
+      WorkflowName: !Ref CityDataWorkflow
+      Actions:
+        - JobName: !Ref GlueETLJob
+
+  RunDataQualityTrigger:
+    Type: AWS::Glue::Trigger
+    DependsOn:
+      - GlueETLJob
+      - GlueDataQualityJob
+      - StartCityDataPipelineTrigger
+    Properties:
+      Name: RunDataQualityTrigger
+      Type: CONDITIONAL
+      StartOnCreation: true
+      Description: Trigger to start Data Quality script after ETL script succeeds
+      WorkflowName: !Ref CityDataWorkflow
+      Predicate:
+        Logical: AND
+        Conditions:
+          - JobName: "city-data-etl-job"
+            State: SUCCEEDED
+            LogicalOperator: EQUALS
+      Actions:
+        - JobName: "city-data-quality-job"
+          Arguments:
+            --JOB_NAME: "RunDataQualityTrigger"
+            --file_path: !Sub "${CityDataProcessedPath}/city_data.parquet/"
+            --bucket_name: !Ref CityDataBucketName
 
 Outputs:
   CrawlerName:
