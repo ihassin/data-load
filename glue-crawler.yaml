@@ -197,7 +197,6 @@ Resources:
       Name: StartCityDataPipelineTrigger
       Description: Trigger to start the ETL script
       Type: ON_DEMAND
-      StartOnCreation: true
       WorkflowName: !Ref CityDataWorkflow
       Actions:
         - JobName: !Ref GlueETLJob
