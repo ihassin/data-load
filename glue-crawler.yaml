@@ -29,6 +29,9 @@ Parameters:
   CityDataBucketName:
     Type: String
     Default: "com-in-context-data-load-staging"
+  ParquetPath:
+    Type: String
+    Default: "city_data.parquet"
 
 Resources:
   CityDataS3BucketName:
@@ -103,7 +106,7 @@ Resources:
   GlueETLJob:
     Type: AWS::Glue::Job
     Properties:
-      Name: city-data-etl-job
+      Name: CityDataETLJob
       Description: "Replace nulls with 'n/a'"
       Role: !GetAtt CityDataGlueCrawlerRole.Arn
       GlueVersion: "5.0"
@@ -119,6 +122,7 @@ Resources:
         "--DATA_FILE_LOCATION": !Ref CityDataPath
         "--DATA_FILE_NAME": !Ref CityDataFileName
         "--PROCESSED_DATA_LOCATION": !Ref CityDataProcessedPath
+        "--PARQUET_PATH": !Ref ParquetPath
       ExecutionProperty:
         MaxConcurrentRuns: 1
       Timeout: 30
@@ -128,7 +132,7 @@ Resources:
   GlueDataQualityJob:
     Type: AWS::Glue::Job
     Properties:
-      Name: city-data-quality-job
+      Name: CityDataQualityJob
       Role: !GetAtt CityDataGlueCrawlerRole.Arn
       GlueVersion: "5.0"
       Command:
@@ -136,18 +140,8 @@ Resources:
         ScriptLocation: !Sub "s3://${CityDataS3BucketName}/${ScriptPath}/${CityDataDQScriptName}"
       DefaultArguments:
         --bucket_name: !Ref CityDataS3BucketName
-        --file_path: !Sub "${CityDataProcessedPath}/city_data.parquet"
+        --file_path: !Sub "${CityDataProcessedPath}/${ParquetPath}"
         --enable-glue-data-quality: "true"
-
-  CityDataAthenaNamedQuery:
-    Type: AWS::Athena::NamedQuery
-    Properties:
-      Database: !Ref CityDataGlueDatabase
-      Description: "Return the cities"
-      Name: "ReturnCities"
-      QueryString: >
-        SELECT * FROM "city_data";
-      WorkGroup: "primary" # Optional: specify a workgroup if needed
 
   ProcessedCityDataGlueTable:
     Type: AWS::Glue::Table
@@ -177,36 +171,42 @@ Resources:
             - Name: city
               Type: string
 
-  ProcessedCityDataAthenaNamedQuery:
-    Type: AWS::Athena::NamedQuery
-    Properties:
-      Database: !Ref CityDataGlueDatabase
-      Description: "Return processed cities"
-      Name: "ReturnProcessedCities"
-      QueryString: !Sub "SELECT * FROM \"${CityDataProcessedTableName}\";"
-      WorkGroup: "primary" # Optional: specify a workgroup if needed
-
   CityDataWorkflow:
     Type: AWS::Glue::Workflow
     Properties:
-      Name: city-data-workflow
+      Name: CityDataWorkflow
 
-  StartCityDataPipelineTrigger:
+  StartCityDataCrawlerTrigger:
+    Type: AWS::Glue::Trigger
+    Properties:
+      Name: StartCityDataCrawlerTrigger
+      Description: Trigger to start the Crawler
+      Type: ON_DEMAND
+      WorkflowName: !Ref CityDataWorkflow
+      Actions:
+        - CrawlerName: !Ref CityDataGlueCrawler
+
+  StartCityDataETLJobTrigger:
     Type: AWS::Glue::Trigger
     Properties:
       Name: StartCityDataPipelineTrigger
       Description: Trigger to start the ETL script
-      Type: ON_DEMAND
+      Type: CONDITIONAL
+      StartOnCreation: true
       WorkflowName: !Ref CityDataWorkflow
+      Predicate:
+        Logical: AND
+        Conditions:
+          - CrawlerName: !Ref CityDataGlueCrawler
+            CrawlState: SUCCEEDED
+            LogicalOperator: EQUALS
       Actions:
         - JobName: !Ref GlueETLJob
 
   RunDataQualityTrigger:
     Type: AWS::Glue::Trigger
     DependsOn:
-      - GlueETLJob
-      - GlueDataQualityJob
-      - StartCityDataPipelineTrigger
+      - StartCityDataETLJobTrigger
     Properties:
       Name: RunDataQualityTrigger
       Type: CONDITIONAL
@@ -223,8 +223,28 @@ Resources:
         - JobName: !Ref GlueDataQualityJob
           Arguments:
             --JOB_NAME: "RunDataQualityTrigger"
-            --file_path: !Sub "${CityDataProcessedPath}/city_data.parquet/"
+            --file_path: !Sub "${CityDataProcessedPath}/${ParquetPath}/"
             --bucket_name: !Ref CityDataBucketName
+
+  ProcessedCityDataAthenaNamedQuery:
+    Type: AWS::Athena::NamedQuery
+    Properties:
+      Database: !Ref CityDataGlueDatabase
+      Description: "Return processed cities"
+      Name: "ReturnProcessedCities"
+      QueryString: !Sub "SELECT * FROM \"${CityDataProcessedTableName}\";"
+      WorkGroup: "primary" # Optional: specify a workgroup if needed
+
+  CityDataAthenaNamedQuery:
+    Type: AWS::Athena::NamedQuery
+    Properties:
+      Database: !Ref CityDataGlueDatabase
+      Description: "Return the cities"
+      Name: "ReturnCities"
+      QueryString: >
+        SELECT * FROM "city_data";
+      WorkGroup: "primary" # Optional: specify a workgroup if needed
+
 
 Outputs:
   CrawlerName:

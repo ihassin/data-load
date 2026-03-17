@@ -22,7 +22,8 @@ args = getResolvedOptions(
         "BUCKET_NAME",
         "DATA_FILE_LOCATION",
         "DATA_FILE_NAME",
-        "PROCESSED_DATA_LOCATION"
+        "PROCESSED_DATA_LOCATION",
+        "PARQUET_PATH"
     ]
 )
 logger.info(f"*** Args: {args}")
@@ -38,6 +39,7 @@ bucket_name = args["BUCKET_NAME"]
 data_file_location = args["DATA_FILE_LOCATION"]
 data_file_name = args["DATA_FILE_NAME"]
 processed_data_location = args["PROCESSED_DATA_LOCATION"]
+parquet_path = args["PARQUET_PATH"]
 
 df = spark.read.option("header","true").csv(
     f"{bucket_name}/{data_file_location}/{data_file_name}"
@@ -54,7 +56,7 @@ for row in df.take(5):
     logger.info(row)
 
 df.write.mode("overwrite").parquet(
-    f"{bucket_name}/{processed_data_location}/city_data.parquet"
+    f"{bucket_name}/{processed_data_location}/{parquet_path}"
 )
 
 job.commit()
