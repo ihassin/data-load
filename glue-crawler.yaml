@@ -50,31 +50,32 @@ Resources:
         Name: !Ref CityDBName
         Description: Database for the data
 
-  EventBridgeGlueRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: eventbridge-glue-workflow-role
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: events.amazonaws.com
-            Action: sts:AssumeRole
-      Policies:
-        - PolicyName: allow-start-workflow
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - glue:StartWorkflowRun
-                Resource: "*"
+#  EventBridgeGlueRole:
+#    Type: AWS::IAM::Role
+#    Properties:
+#      RoleName: eventbridge-glue-workflow-role
+#      AssumeRolePolicyDocument:
+#        Version: "2012-10-17"
+#        Statement:
+#          - Effect: Allow
+#            Principal:
+#              Service: events.amazonaws.com
+#            Action: sts:AssumeRole
+#      Policies:
+#        - PolicyName: allow-start-workflow
+#          PolicyDocument:
+#            Version: "2012-10-17"
+#            Statement:
+#              - Effect: Allow
+#                Action:
+#                  - glue:StartWorkflowRun
+#                Resource: "*"
 
   CityDataGlueCrawlerRole:
     Type: AWS::IAM::Role
     Properties:
       RoleName: CityDataCrawlerRole
+      Description: Allows Crawler to manipulate the CityData objects
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -116,6 +117,7 @@ Resources:
     Type: AWS::Glue::Crawler
     Properties:
       Name: CityDataCrawler
+      Description: Crawler for City Data
       Role: !GetAtt CityDataGlueCrawlerRole.Arn
       DatabaseName: !Ref CityDataGlueDatabase
       Classifiers:
@@ -131,7 +133,7 @@ Resources:
     Type: AWS::Glue::Job
     Properties:
       Name: CityDataETLJob
-      Description: "Replace nulls with 'n/a'"
+      Description: "ETL Job to ingest city data and transform nulls to n/a"
       Role: !GetAtt CityDataGlueCrawlerRole.Arn
       GlueVersion: "5.0"
       Command:
@@ -157,6 +159,7 @@ Resources:
     Type: AWS::Glue::Job
     Properties:
       Name: CityDataQualityJob
+      Description: "ETL Job to assure that column values are not nulls"
       Role: !GetAtt CityDataGlueCrawlerRole.Arn
       GlueVersion: "5.0"
       Command:
@@ -201,6 +204,7 @@ Resources:
       - CityDataWorkflow
     Properties:
       RoleName: lambda-glue-workflow-role
+      Description: Allow lambda to access Glue Workflow
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -224,6 +228,7 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: start-glue-workflow
+      Description: Lambda to initiate workflow
       Runtime: python3.11
       Handler: index.lambda_handler
       Role: !GetAtt LambdaExecutionRole.Arn
@@ -249,6 +254,7 @@ Resources:
     Type: AWS::Glue::Workflow
     Properties:
       Name: CityDataWorkflow
+      Description: Workflow to run CityData ETL and Data Quality jobs
 
   S3EventRule:
     Type: AWS::Events::Rule
@@ -311,9 +317,9 @@ Resources:
       - StartCityDataETLJobTrigger
     Properties:
       Name: RunDataQualityTrigger
+      Description: Trigger to start Data Quality script after ETL script succeeds
       Type: CONDITIONAL
       StartOnCreation: true
-      Description: Trigger to start Data Quality script after ETL script succeeds
       WorkflowName: !Ref CityDataWorkflow
       Predicate:
         Logical: AND
@@ -331,21 +337,21 @@ Resources:
   ProcessedCityDataAthenaNamedQuery:
     Type: AWS::Athena::NamedQuery
     Properties:
-      Database: !Ref CityDataGlueDatabase
-      Description: "Return processed cities"
       Name: "ReturnProcessedCities"
+      Description: "Return processed cities"
+      Database: !Ref CityDataGlueDatabase
       QueryString: !Sub "SELECT * FROM \"${CityDataProcessedTableName}\";"
-      WorkGroup: "primary" # Optional: specify a workgroup if needed
+      WorkGroup: "primary"
 
   CityDataAthenaNamedQuery:
     Type: AWS::Athena::NamedQuery
     Properties:
-      Database: !Ref CityDataGlueDatabase
-      Description: "Return the cities"
       Name: "ReturnCities"
+      Description: "Return the cities"
+      Database: !Ref CityDataGlueDatabase
       QueryString: >
         SELECT * FROM "city_data";
-      WorkGroup: "primary" # Optional: specify a workgroup if needed
+      WorkGroup: "primary"
 
 
 Outputs:
@@ -356,7 +362,3 @@ Outputs:
   DatabaseName:
     Value: !Ref CityDataGlueDatabase
     Description: Name of the created database
-
-  CityDataWorkflow:
-    Value: !Ref CityDataWorkflow
-    Description: Use glue start-workflow-run --name CityDataWorkflow
