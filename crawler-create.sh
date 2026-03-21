@@ -29,3 +29,6 @@ echo "Starting workflow"
 RUN_ID=$(aws glue start-workflow-run --name "$WORKFLOW_NAME" --query 'RunId' --output text --profile "$AWS_TW_PROFILE" --region "$AWS_PERSONAL_REGION")
 aws glue get-workflow-run --name "$WORKFLOW_NAME" --run-id $RUN_ID --output text \
   --profile "$AWS_TW_PROFILE" --region "$AWS_PERSONAL_REGION"
+
+echo "Follow along:"
+echo "https://$AWS_PERSONAL_REGION.console.aws.amazon.com/glue/home?region=$AWS_PERSONAL_REGION#/v2/etl-configuration/workflows/run/$WORKFLOW_NAME?runId=$RUN_ID"

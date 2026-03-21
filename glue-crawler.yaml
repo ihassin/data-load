@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: Create an AWS Glue crawler, catalogue, ETL job, Athena queries
+Description: Create an AWS Glue crawler, catalogue, ETL & Data quality jobs, Workflow, Athena queries
 
 Parameters:
   CityDBName:
@@ -254,3 +254,7 @@ Outputs:
   DatabaseName:
     Value: !Ref CityDataGlueDatabase
     Description: Name of the created database
+
+  CityDataWorkflow:
+    Value: !Ref CityDataWorkflow
+    Description: Use glue start-workflow-run --name CityDataWorkflow
