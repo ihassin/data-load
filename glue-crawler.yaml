@@ -38,6 +38,9 @@ Resources:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Ref CityDataBucketName
+      NotificationConfiguration:
+        EventBridgeConfiguration:
+          EventBridgeEnabled: true
 
   CityDataGlueDatabase:
     Type: AWS::Glue::Database
@@ -46,6 +49,27 @@ Resources:
       DatabaseInput:
         Name: !Ref CityDBName
         Description: Database for the data
+
+  EventBridgeGlueRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: eventbridge-glue-workflow-role
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: allow-start-workflow
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - glue:StartWorkflowRun
+                Resource: "*"
 
   CityDataGlueCrawlerRole:
     Type: AWS::IAM::Role
@@ -171,16 +195,94 @@ Resources:
             - Name: city
               Type: string
 
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    DependsOn:
+      - CityDataWorkflow
+    Properties:
+      RoleName: lambda-glue-workflow-role
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: allow-glue-workflow
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - glue:StartWorkflowRun
+                Resource: !Sub "arn:aws:glue:${AWS::Region}:${AWS::AccountId}:workflow/${CityDataWorkflow}"
+
+  StartWorkflowLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: start-glue-workflow
+      Runtime: python3.11
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 30
+      Code:
+        ZipFile: |
+          import boto3
+          import os
+
+          glue = boto3.client("glue")
+
+          def lambda_handler(event, context):
+              print("Event:", event)
+              glue.start_workflow_run(
+                  Name=os.environ["WORKFLOW_NAME"]
+              )
+              return {"status": "started"}
+      Environment:
+        Variables:
+          WORKFLOW_NAME: !Ref CityDataWorkflow
+
   CityDataWorkflow:
     Type: AWS::Glue::Workflow
     Properties:
       Name: CityDataWorkflow
 
+  S3EventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: CityDataUploadTrigger
+      Description: Trigger Glue workflow when data is uploaded to S3
+      EventPattern:
+        source:
+          - aws.s3
+        detail-type:
+          - Object Created
+        detail:
+          bucket:
+            name:
+              - !Ref CityDataBucketName
+          object:
+            key:
+              - prefix: !Sub "${CityDataPath}/"
+      Targets:
+        - Arn: !GetAtt StartWorkflowLambda.Arn
+          Id: LambdaTarget
+
+  LambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref StartWorkflowLambda
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt S3EventRule.Arn
+
   StartCityDataCrawlerTrigger:
     Type: AWS::Glue::Trigger
     Properties:
       Name: StartCityDataCrawlerTrigger
-      Description: Trigger to start the Crawler
       Type: ON_DEMAND
       WorkflowName: !Ref CityDataWorkflow
       Actions:

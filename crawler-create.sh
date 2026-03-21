@@ -8,8 +8,7 @@ echo "Submitting stack"
 aws cloudformation deploy --template-file glue-crawler.yaml --stack-name com-in-context-city-data-etl --capabilities CAPABILITY_NAMED_IAM \
 --profile "$AWS_TW_PROFILE" --region "$AWS_PERSONAL_REGION"
 
-echo "Loading data and script"
-aws s3 sync ./data/ "s3://$STAGING_BUCKET_NAME/$DATA_PATH" --profile "$AWS_TW_PROFILE" --region "$AWS_PERSONAL_REGION"
+echo "Loading script"
 aws s3 sync ./scripts/ "s3://$STAGING_BUCKET_NAME/scripts" --profile "$AWS_TW_PROFILE" --region "$AWS_PERSONAL_REGION"
 
 #echo "Starting crawler"
@@ -25,10 +24,12 @@ aws s3 sync ./scripts/ "s3://$STAGING_BUCKET_NAME/scripts" --profile "$AWS_TW_PR
 #
 #echo "Crawler finished"
 
-echo "Starting workflow"
-RUN_ID=$(aws glue start-workflow-run --name "$WORKFLOW_NAME" --query 'RunId' --output text --profile "$AWS_TW_PROFILE" --region "$AWS_PERSONAL_REGION")
-aws glue get-workflow-run --name "$WORKFLOW_NAME" --run-id $RUN_ID --output text \
-  --profile "$AWS_TW_PROFILE" --region "$AWS_PERSONAL_REGION"
+#echo "Starting workflow"
+#RUN_ID=$(aws glue start-workflow-run --name "$WORKFLOW_NAME" --query 'RunId' --output text --profile "$AWS_TW_PROFILE" --region "$AWS_PERSONAL_REGION")
+#aws glue get-workflow-run --name "$WORKFLOW_NAME" --run-id $RUN_ID --output text \
+#  --profile "$AWS_TW_PROFILE" --region "$AWS_PERSONAL_REGION"
 
-echo "Follow along:"
-echo "https://$AWS_PERSONAL_REGION.console.aws.amazon.com/glue/home?region=$AWS_PERSONAL_REGION#/v2/etl-configuration/workflows/run/$WORKFLOW_NAME?runId=$RUN_ID"
+#aws s3 sync ./data/ "s3://$STAGING_BUCKET_NAME/$DATA_PATH" --profile "$AWS_TW_PROFILE" --region "$AWS_PERSONAL_REGION"
+
+#echo "Follow along:"
+#echo "https://$AWS_PERSONAL_REGION.console.aws.amazon.com/glue/home?region=$AWS_PERSONAL_REGION#/v2/etl-configuration/workflows/run/$WORKFLOW_NAME?runId=$RUN_ID"
