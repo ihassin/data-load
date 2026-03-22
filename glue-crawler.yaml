@@ -273,6 +273,12 @@ Resources:
           object:
             key:
               - prefix: !Sub "${CityDataPath}/"
+              - suffix: !Ref CityDataFileName
+          reason:
+            - PutObject
+            - CompleteMultipartUpload
+            - CopyObject
+
       Targets:
         - Arn: !GetAtt StartWorkflowLambda.Arn
           Id: LambdaTarget
